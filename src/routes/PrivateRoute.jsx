@@ -1,18 +1,15 @@
 import { Navigate, useLocation } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import CustomLoader from "../pages/Shared/CustomLoader/CustomLoader";
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
-  console.log(location)
-
   if (loading) {
-    return <CustomLoader />;
+    return <div className="page empty-state">Loading your account...</div>;
   }
 
   if (!user) {
-    return <Navigate state={location.pathname} to="/signIn"  />;
+    return <Navigate state={{ from: location }} to="/login" replace />;
   }
 
   return children;
