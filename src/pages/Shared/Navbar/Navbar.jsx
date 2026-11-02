@@ -10,10 +10,12 @@ const Navbar = () => {
 
   const { user, logOut } = useAuth();
   const { role, roleLoading, roleError } = useRole();
-  const isShopkeeper = ["seller", "shopkeeper", "shopkeeperrole"].includes(
-    String(role).trim().toLowerCase(),
-  );
-  const accountLinks = isShopkeeper
+  const normalizedRole = String(role).trim().toLowerCase();
+  const isAdmin = normalizedRole === "admin";
+  const isShopkeeper = ["seller", "shopkeeper", "shopkeeperrole"].includes(normalizedRole);
+  const accountLinks = isAdmin
+    ? [["/admin/users", "All Users"], ["/admin/pending-products", "Pending Products"]]
+    : isShopkeeper
     ? [["/shop-profile", "Shop Profile"], ["/add-product", "Add Product"], ["/all-products", "All Product"], ["/manage-orders", "Manage Order"]]
     : [["/profile", "Add Profile"], ["/cart", "Cart"], ["/wishlist", "Wishlist"], ["/my-orders", "My order"]];
   const links = [["/", "Home"], ["/products", "Shop"], ["/about", "Our story"], ["/contact", "Contact"]];

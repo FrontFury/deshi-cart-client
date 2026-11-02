@@ -1,22 +1,20 @@
 import useAuth from "../hooks/useAuth";
 import useRole from "../hooks/useRole";
-import CustomLoader from "../pages/Shared/CustomLoader/CustomLoader";
-import ForbiddenPage from "../pages/Shared/ForbiddenPage/ForbiddenPage";
 
 const RoleRoute = ({ allowedRoles, children }) => {
   const { user, loading } = useAuth();
   const { role, roleLoading } = useRole();
 
   if (loading || roleLoading) {
-    return <CustomLoader />;
+    return <div className="page empty-state">Loading your account...</div>;
   }
 
   if (!user) {
-    return <ForbiddenPage />;
+    return <main className="page empty-state"><h1>Access denied</h1><p>Please sign in to continue.</p></main>;
   }
 
-  if (!allowedRoles.includes(role?.role)) {
-    return <ForbiddenPage />;
+  if (!allowedRoles.map((allowedRole) => allowedRole.toLowerCase()).includes(String(role).toLowerCase())) {
+    return <main className="page empty-state"><h1>Access denied</h1><p>You do not have permission to view this page.</p></main>;
   }
 
   return children;

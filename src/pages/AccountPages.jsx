@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Edit3, Minus, Plus, ShoppingBag, Trash2, UserRound } from "lucide-react";
+import { Check, ClipboardCheck, Edit3, Heart, Minus, Plus, ShoppingBag, Trash2, UserRound, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import useAuth from "../hooks/useAuth";
 import useCreateProduct from "../hooks/useCreateProduct";
 import useSaveProfile from "../hooks/useSaveProfile";
 import useProfile from "../hooks/useProfile";
 import useSellerProducts from "../hooks/useSellerProducts";
+import useAxiosSecure from "../hooks/useAxiosSecure";
 import { auth } from "../firebase/firebase.init";
 import { products } from "../App";
 
@@ -46,6 +48,25 @@ export function WishlistPage() {
   return <main className="page account-page"><PageHeader eyebrow="Saved for later" title={<>Your <em>wishlist.</em></>} description="Keep the pieces you love close by." /><div className="wishlist-grid">{products.slice(1, 5).map((product) => <article className="wishlist-card" key={product.id}><img src={product.image} alt={product.name} /><div><p className="eyebrow">{product.category}</p><h3>{product.name}</h3><strong>{money(product.price)}</strong><div><button className="btn btn-primary">Add to cart</button><button className="delete-button" aria-label={`Remove ${product.name}`}><Trash2 size={16} /></button></div></div></article>)}</div></main>;
 }
 
+export function ServerCartPage() {
+  const axiosSecure = useAxiosSecure();
+  const queryClient = useQueryClient();
+  const { data: cartItems = [], isLoading, isError } = useQuery({ queryKey: ["cart"], queryFn: async () => (await axiosSecure.get("/api/cart")).data });
+  const updateQuantity = useMutation({ mutationFn: ({ id, quantity }) => axiosSecure.patch(`/api/cart/${id}`, { quantity }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }) });
+  const removeItem = useMutation({ mutationFn: (id) => axiosSecure.delete(`/api/cart/${id}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }) });
+  const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * item.quantity, 0);
+  return <main className="page account-page"><PageHeader eyebrow="Your shopping bag" title={<>Ready to <em>checkout?</em></>} description="Review your selected pieces before placing your order." /><div className="split-layout"><Panel><div className="panel-title"><div><h2>Cart items</h2><p>{cartItems.length} item{cartItems.length === 1 ? "" : "s"} in your bag</p></div><ShoppingBag /></div>{isLoading && <p className="muted">Loading your cart...</p>}{isError && <p className="form-error">Could not load your cart.</p>}{!isLoading && !isError && cartItems.length === 0 && <div className="empty-state"><ShoppingBag size={35} /><h2>Your cart is empty</h2><Link className="btn btn-primary" to="/products">Browse products</Link></div>}{cartItems.map((item) => <div className="line-item" key={item._id}><img src={item.image} alt={item.name} /><div className="line-item-info"><h3>{item.name}</h3><p>{item.category}</p><strong>{money(Number(item.price) || 0)}</strong><div className="quantity"><button disabled={item.quantity <= 1} onClick={() => updateQuantity.mutate({ id: item._id, quantity: item.quantity - 1 })} aria-label="Decrease quantity"><Minus size={15} /></button><span>{item.quantity}</span><button onClick={() => updateQuantity.mutate({ id: item._id, quantity: item.quantity + 1 })} aria-label="Increase quantity"><Plus size={15} /></button></div></div><button className="delete-button" onClick={() => removeItem.mutate(item._id)} aria-label={`Remove ${item.name}`}><Trash2 size={17} /></button></div>)}</Panel><Panel className="order-summary"><h2>Order summary</h2><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Delivery</span><strong>৳80</strong></div><hr /><div className="summary-total"><span>Total</span><strong>{money(subtotal + 80)}</strong></div><button disabled={!cartItems.length} className="btn btn-primary full">Proceed to checkout</button></Panel></div></main>;
+}
+
+export function ServerWishlistPage() {
+  const axiosSecure = useAxiosSecure();
+  const queryClient = useQueryClient();
+  const { data: wishlist = [], isLoading, isError } = useQuery({ queryKey: ["wishlist"], queryFn: async () => (await axiosSecure.get("/api/wishlist")).data });
+  const removeWishlist = useMutation({ mutationFn: (id) => axiosSecure.delete(`/api/wishlist/${id}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }) });
+  const addToCart = useMutation({ mutationFn: (product) => axiosSecure.post("/api/cart", { productId: product.productId, name: product.name, price: product.price, image: product.image, quantity: 1 }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }) });
+  return <main className="page account-page"><PageHeader eyebrow="Saved for later" title={<>Your <em>wishlist.</em></>} description="Keep the pieces you love close by." />{isLoading && <p className="muted">Loading your wishlist...</p>}{isError && <p className="form-error">Could not load your wishlist.</p>}{!isLoading && !isError && wishlist.length === 0 && <div className="empty-state"><Heart size={35} /><h2>Your wishlist is empty</h2><Link className="btn btn-primary" to="/products">Find products</Link></div>}<div className="wishlist-grid">{wishlist.map((product) => <article className="wishlist-card" key={product._id}><img src={product.image} alt={product.name} /><div><p className="eyebrow">{product.category}</p><h3>{product.name}</h3><strong>{money(Number(product.price) || 0)}</strong><div><button className="btn btn-primary" onClick={() => addToCart.mutate(product)}>Add to cart</button><button className="delete-button" onClick={() => removeWishlist.mutate(product._id)} aria-label={`Remove ${product.name}`}><Trash2 size={16} /></button></div></div></article>)}</div></main>;
+}
+
 export function OrdersPage() {
   const orders = [{ id: "DC-1048", date: "02 Nov 2026", status: "Delivered", item: "Classic Handloom Saree", total: 1930 }, { id: "DC-1031", date: "18 Oct 2026", status: "On the way", item: "Jamdani Dupatta", total: 970 }];
   return <main className="page account-page"><PageHeader eyebrow="Your purchases" title={<>My <em>orders.</em></>} description="Track your orders and revisit your DeshiCart purchases." /><Panel><div className="panel-title"><div><h2>Order history</h2><p>{orders.length} orders placed</p></div><ShoppingBag /></div><div className="orders-table">{orders.map((order) => <div className="order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.date}</span></div><div><strong>{order.item}</strong><span>{money(order.total)}</span></div><span className={`status ${order.status === "Delivered" ? "delivered" : "transit"}`}>{order.status}</span><Link className="text-link" to="/contact">View details</Link></div>)}</div></Panel></main>;
@@ -70,8 +91,52 @@ export function ShopProfilePage() {
 export function AddProductPage() {
   const { mutateAsync: createProduct, isPending, isSuccess, isError, error } = useCreateProduct();
   const [image, setImage] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState("");
+  const imageHostKey = import.meta.env.VITE_image_host_key;
+
+  const uploadImage = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImageFile(file);
+    setImage("");
+    setImageUploadError("");
+
+    if (!imageHostKey) {
+      setImageUploadError("Image hosting is not configured. Please contact support.");
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append("key", imageHostKey);
+      uploadData.append("image", file);
+      const response = await fetch("https://api.imgbb.com/1/upload", {
+        method: "POST",
+        body: uploadData,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success || !result.data?.display_url) {
+        throw new Error(result.error?.message || "Image upload failed");
+      }
+      setImage(result.data.display_url);
+    } catch (uploadError) {
+      setImageFile(null);
+      setImageUploadError(uploadError.message || "Image upload failed. Please try again.");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const submit = async (event) => {
     event.preventDefault();
+    if (!image) {
+      setImageUploadError("Please upload a product image before submitting.");
+      return;
+    }
     const data = new FormData(event.currentTarget);
     await createProduct({
       name: data.get("name"),
@@ -80,20 +145,62 @@ export function AddProductPage() {
       description: data.get("description"),
       image: image.trim(),
       sellerEmail: auth.currentUser?.email || "",
-      status: "active",
+      status: "pending",
     });
     event.currentTarget.reset();
     setImage("");
+    setImageFile(null);
+    setImageUploadError("");
   };
-  return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>Add a new <em>product.</em></>} description="Create a beautiful listing for your next fashion piece." /><Panel><form className="account-form" onSubmit={submit}><label>Product name<input name="name" placeholder="e.g. Handloom Cotton Saree" required /></label><div className="form-two-col"><label>Category<select name="category" defaultValue="Sarees"><option>Sarees</option><option>Womenswear</option><option>Menswear</option><option>Accessories</option></select></label><label>Price (৳)<input name="price" type="number" min="1" placeholder="1850" required /></label></div><label>Description<textarea name="description" rows="4" placeholder="Describe fabric, fit, colour and care instructions..." required /></label><label>Product image URL<input value={image} onChange={(event) => setImage(event.target.value)} type="url" placeholder="https://example.com/product-image.jpg" required /></label>{isSuccess && <p className="success-message"><Check size={16} /> Product published successfully.</p>}{isError && <p className="form-error">{error?.response?.data?.message || "Could not publish product. Please try again."}</p>}<button disabled={isPending} className="btn btn-primary" type="submit">{isPending ? "Publishing..." : "Publish product"}</button></form></Panel></main>;
+  return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>Add a new <em>product.</em></>} description="Create a beautiful listing for your next fashion piece." /><Panel><form className="account-form" onSubmit={submit}><label>Product name<input name="name" placeholder="e.g. Handloom Cotton Saree" required /></label><div className="form-two-col"><label>Category<select name="category" defaultValue="Sarees"><option>Sarees</option><option>Womenswear</option><option>Menswear</option><option>Accessories</option></select></label><label>Price (৳)<input name="price" type="number" min="1" placeholder="1850" required /></label></div><label>Description<textarea name="description" rows="4" placeholder="Describe fabric, fit, colour and care instructions..." required /></label><label>Product image<input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={uploadImage} required /></label>{imageFile && <p className="saved-hint">{imageUploading ? "Uploading image..." : image ? `${imageFile.name} uploaded successfully.` : imageFile.name}</p>}{imageUploadError && <p className="form-error">{imageUploadError}</p>}{isSuccess && <p className="success-message"><Check size={16} /> Product submitted for admin approval.</p>}{isError && <p className="form-error">{error?.response?.data?.message || "Could not submit product. Please try again."}</p>}<button disabled={isPending || imageUploading || !image} className="btn btn-primary" type="submit">{imageUploading ? "Uploading image..." : isPending ? "Submitting..." : "Submit for approval"}</button></form></Panel></main>;
 }
 
 export function AllProductsPage() {
   const { data: sellerProducts = [], isLoading, isError } = useSellerProducts();
-  return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>All <em>products.</em></>} description="Review and manage the products in your shop." /><Panel><div className="panel-title"><div><h2>Product catalogue</h2><p>{sellerProducts.length} active listings</p></div><Link className="btn btn-primary" to="/add-product">Add product</Link></div>{isLoading && <p className="muted">Loading your products...</p>}{isError && <p className="form-error">Could not load your products.</p>}{!isLoading && sellerProducts.length === 0 && <div className="empty-state"><ShoppingBag size={35} /><h2>No products yet</h2><p>Publish your first product to see it here.</p></div>}<div className="manage-list">{sellerProducts.map((product) => <div className="manage-row" key={product._id || product.id}><img src={product.image} alt="" /><div><strong>{product.name}</strong><span>{product.category} · {money(product.price)}</span></div><span className="status delivered">Active</span><button className="icon-action" aria-label={`Edit ${product.name}`}><Edit3 size={16} /></button></div>)}</div></Panel></main>;
+  return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>All <em>products.</em></>} description="Review and manage the products in your shop." /><Panel><div className="panel-title"><div><h2>Product catalogue</h2><p>{sellerProducts.length} listings</p></div><Link className="btn btn-primary" to="/add-product">Add product</Link></div>{isLoading && <p className="muted">Loading your products...</p>}{isError && <p className="form-error">Could not load your products.</p>}{!isLoading && sellerProducts.length === 0 && <div className="empty-state"><ShoppingBag size={35} /><h2>No products yet</h2><p>Publish your first product to see it here.</p></div>}<div className="manage-list">{sellerProducts.map((product) => <div className="manage-row" key={product._id || product.id}><img src={product.image} alt="" /><div><strong>{product.name}</strong><span>{product.category} · {money(product.price)}</span></div><span className={`status ${product.status === "approved" ? "delivered" : "transit"}`}>{product.status || "Pending"}</span><button className="icon-action" aria-label={`Edit ${product.name}`}><Edit3 size={16} /></button></div>)}</div></Panel></main>;
 }
 
 export function ManageOrdersPage() {
   const orders = [{ id: "DC-1048", customer: "Tasnim Rahman", item: "Classic Handloom Saree", total: "৳1,930", status: "Processing" }, { id: "DC-1047", customer: "Nabila Ahmed", item: "Linen Relaxed Shirt", total: "৳1,330", status: "Shipped" }, { id: "DC-1046", customer: "Rafi Karim", item: "Artisan Leather Tote", total: "৳1,730", status: "Delivered" }];
   return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>Manage <em>orders.</em></>} description="Keep customers updated from payment to delivery." /><Panel><div className="panel-title"><div><h2>Recent orders</h2><p>Update status as orders move through fulfilment.</p></div><ShoppingBag /></div><div className="manage-list">{orders.map((order) => <div className="manage-row order-manage-row" key={order.id}><div><strong>{order.id} · {order.customer}</strong><span>{order.item} · {order.total}</span></div><select defaultValue={order.status} aria-label={`Status for ${order.id}`}><option>Processing</option><option>Shipped</option><option>Delivered</option></select><button className="icon-action" aria-label={`Save ${order.id}`}><Check size={16} /></button></div>)}</div></Panel></main>;
+}
+
+const getCollection = (data) => {
+  if (Array.isArray(data)) return data;
+  const collection = data?.users || data?.products || data?.data;
+  return Array.isArray(collection) ? collection : [];
+};
+
+export function AdminUsersPage() {
+  const axiosSecure = useAxiosSecure();
+  const { data: users = [], isLoading, isError } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const response = await axiosSecure.get("/api/users");
+      return getCollection(response.data);
+    },
+  });
+
+  return <main className="page account-page"><PageHeader eyebrow="Admin workspace" title={<>All <em>users.</em></>} description="Review the customers and sellers registered on DeshiCart." /><Panel><div className="panel-title"><div><h2>User directory</h2><p>{users.length} registered users</p></div><Users /></div>{isLoading && <p className="muted">Loading users...</p>}{isError && <p className="form-error">Could not load users.</p>}{!isLoading && users.length === 0 && <div className="empty-state"><Users size={35} /><h2>No users found</h2></div>}<div className="manage-list">{users.map((listedUser) => <div className="manage-row" key={listedUser._id || listedUser.uid || listedUser.email}><div><strong>{listedUser.name || listedUser.displayName || "Unnamed user"}</strong><span>{listedUser.email}</span></div><span className="status delivered">{listedUser.role || "customer"}</span></div>)}</div></Panel></main>;
+}
+
+export function AdminPendingProductsPage() {
+  const axiosSecure = useAxiosSecure();
+  const queryClient = useQueryClient();
+  const { mutate: updateStatus, isPending: isUpdating } = useMutation({
+    mutationFn: ({ id, status }) => axiosSecure.patch(`/api/products/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-pending-products"] });
+      queryClient.invalidateQueries({ queryKey: ["approved-products"] });
+    },
+  });
+  const { data: pendingProducts = [], isLoading, isError } = useQuery({
+    queryKey: ["admin-pending-products"],
+    queryFn: async () => {
+      const response = await axiosSecure.get("/api/products?status=pending");
+      return getCollection(response.data);
+    },
+  });
+
+  return <main className="page account-page"><PageHeader eyebrow="Admin workspace" title={<>Pending <em>products.</em></>} description="Review product listings waiting for approval before they appear in the shop." /><Panel><div className="panel-title"><div><h2>Approval queue</h2><p>{pendingProducts.length} products awaiting review</p></div><ClipboardCheck /></div>{isLoading && <p className="muted">Loading pending products...</p>}{isError && <p className="form-error">Could not load pending products.</p>}{!isLoading && pendingProducts.length === 0 && <div className="empty-state"><ClipboardCheck size={35} /><h2>Queue is clear</h2><p>There are no products waiting for approval.</p></div>}<div className="manage-list">{pendingProducts.map((product) => <div className="manage-row" key={product._id || product.id}><img src={product.image} alt="" /><div><strong>{product.name}</strong><span>{product.category} · {money(Number(product.price) || 0)}</span></div><span className="status transit">Pending</span><div className="admin-actions"><button className="btn btn-primary" disabled={isUpdating} onClick={() => updateStatus({ id: product._id, status: "approved" })}>Approve</button><button className="btn btn-outline" disabled={isUpdating} onClick={() => updateStatus({ id: product._id, status: "rejected" })}>Reject</button></div></div>)}</div></Panel></main>;
 }

@@ -6,6 +6,9 @@ import {
 } from "lucide-react";
 import useAuth from "./hooks/useAuth";
 import useCreateUser from "./hooks/useCreateUser";
+import useAxios from "./hooks/useAxios";
+import useAxiosSecure from "./hooks/useAxiosSecure";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import "./App.css";
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -20,19 +23,19 @@ export const products = [
 
 const money = (value) => `৳${value.toLocaleString("en-BD")}`;
 
-function ProductCard({ product, onAdd }) {
+function ProductCard({ product, onAdd, onWishlist }) {
   return (
     <article className="product-card">
       <div className="product-image">
         <img src={product.image} alt={product.name} />
-        <span className="product-tag">{product.tag}</span>
-        <button className="icon-button product-heart" aria-label={`Add ${product.name} to wishlist`}><Heart size={18} /></button>
+        <span className="product-tag">{product.tag || product.status || "Approved"}</span>
+        <button className="icon-button product-heart" onClick={() => onWishlist?.(product)} aria-label={`Add ${product.name} to wishlist`}><Heart size={18} /></button>
       </div>
       <div className="product-info">
         <p className="eyebrow">{product.category}</p>
         <h3>{product.name}</h3>
         <div className="rating"><Star size={15} fill="currentColor" /> {product.rating} <span>(24)</span></div>
-        <div className="product-bottom"><div><strong>{money(product.price)}</strong><del>{money(product.oldPrice)}</del></div><button className="add-button" onClick={() => onAdd(product)} aria-label={`Add ${product.name} to cart`}><ShoppingBag size={18} /></button></div>
+        <div className="product-bottom"><div><strong>{money(Number(product.price) || 0)}</strong>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</div><button className="add-button" onClick={() => onAdd?.(product)} aria-label={`Add ${product.name} to cart`}><ShoppingBag size={18} /></button></div>
       </div>
     </article>
   );
@@ -51,12 +54,49 @@ export function Home() {
 }
 
 export function Products() {
+  const axiosPublic = useAxios();
+  const axiosSecure = useAxiosSecure();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
-  const filtered = useMemo(() => products.filter((p) => (category === "All" || p.category === category) && p.name.toLowerCase().includes(query.toLowerCase())), [category, query]);
-  const add = (p) => { setNotice(`${p.name} added to your cart.`); window.setTimeout(() => setNotice(""), 2400); };
-  return <main className="page"><div className="page-heading"><p className="eyebrow">The fashion collection</p><h1>Find your next <em>favourite.</em></h1><p>Beautiful clothing and accessories with a story behind them, made by local designers and artisans.</p></div><div className="shop-tools"><div className="search-box"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search fashion..." /></div><div className="filter-row">{["All", "Sarees", "Womenswear", "Menswear", "Accessories"].map((item) => <button key={item} className={category === item ? "filter active" : "filter"} onClick={() => setCategory(item)}>{item}</button>)}</div></div>{notice && <div className="toast"><Check size={18} /> {notice}</div>}<div className="product-grid">{filtered.map((p) => <ProductCard key={p.id} product={p} onAdd={add} />)}</div>{filtered.length === 0 && <div className="empty-state"><Search size={40} /><h2>No fashion items found</h2><p>Try a different search or category.</p></div>}</main>;
+  const { data: approvedProducts = [], isLoading, isError } = useQuery({
+    queryKey: ["approved-products"],
+    queryFn: async () => (await axiosPublic.get("/api/products")).data,
+  });
+  const addCart = useMutation({
+    mutationFn: (product) => axiosSecure.post("/api/cart", {
+      productId: product._id || product.id,
+      name: product.name,
+      price: Number(product.price) || 0,
+      image: product.image,
+      quantity: 1,
+    }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
+  });
+  const addWishlist = useMutation({
+    mutationFn: (product) => axiosSecure.post("/api/wishlist", {
+      productId: product._id || product.id,
+      name: product.name,
+      category: product.category,
+      price: Number(product.price) || 0,
+      image: product.image,
+    }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  });
+  const filtered = useMemo(() => approvedProducts.filter((p) => (category === "All" || p.category === category) && p.name.toLowerCase().includes(query.toLowerCase())), [approvedProducts, category, query]);
+  const add = async (p) => {
+    if (!user) { setNotice("Please sign in to add products to your cart."); return; }
+    try { await addCart.mutateAsync(p); setNotice(`${p.name} added to your cart.`); } catch (error) { setNotice(error.response?.data?.message || "Could not add product to cart."); }
+    window.setTimeout(() => setNotice(""), 2400);
+  };
+  const addToWishlist = async (p) => {
+    if (!user) { setNotice("Please sign in to save products."); return; }
+    try { await addWishlist.mutateAsync(p); setNotice(`${p.name} saved to your wishlist.`); } catch (error) { setNotice(error.response?.data?.message || "Could not save product."); }
+    window.setTimeout(() => setNotice(""), 2400);
+  };
+  return <main className="page"><div className="page-heading"><p className="eyebrow">The fashion collection</p><h1>Find your next <em>favourite.</em></h1><p>Beautiful clothing and accessories with a story behind them, made by local designers and artisans.</p></div><div className="shop-tools"><div className="search-box"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search fashion..." /></div><div className="filter-row">{["All", "Sarees", "Womenswear", "Menswear", "Accessories"].map((item) => <button key={item} className={category === item ? "filter active" : "filter"} onClick={() => setCategory(item)}>{item}</button>)}</div></div>{notice && <div className="toast"><Check size={18} /> {notice}</div>}{isLoading && <div className="empty-state"><p>Loading approved products...</p></div>}{isError && <div className="empty-state"><p>Could not load products from the server.</p></div>}{!isLoading && !isError && <div className="product-grid">{filtered.map((p) => <ProductCard key={p._id || p.id} product={p} onAdd={add} onWishlist={addToWishlist} />)}</div>}{!isLoading && !isError && filtered.length === 0 && <div className="empty-state"><Search size={40} /><h2>No fashion items found</h2><p>Try a different search or category.</p></div>}</main>;
 }
 
 export function About() { return <main className="page"><div className="about-grid"><div><p className="eyebrow">Our story</p><h1>Style can be <em>meaningful.</em></h1><p className="lead">DeshiCart started with one simple belief: what we wear should make life better for the people who make it too.</p><p>We partner with independent designers, weavers, tailors, and small fashion businesses across Bangladesh. From handloom sarees to everyday essentials, every piece is selected for its quality, character, and the story it carries.</p><Link className="btn btn-primary" to="/products">Explore fashion <ArrowRight size={18} /></Link></div><img className="about-image" src="https://images.unsplash.com/photo-1590736969955-71cc94901144?auto=format&fit=crop&w=1000&q=85" alt="Artisan weaving colourful fabric" /></div><div className="values-grid"><div className="value-card"><Leaf /><h3>Local craftsmanship</h3><p>Your purchase keeps local fashion skills and businesses growing.</p></div><div className="value-card"><Heart /><h3>Made with intention</h3><p>We choose timeless pieces designed to be loved and worn often.</p></div><div className="value-card"><ShieldCheck /><h3>Quality always</h3><p>Every garment is checked before it reaches your wardrobe.</p></div></div></main>; }
