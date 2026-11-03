@@ -43,8 +43,13 @@ function ProductCard({ product, onAdd, onWishlist }) {
 
 export function Home() {
   const [notice, setNotice] = useState("");
+  const axiosPublic = useAxios();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { data: homeProducts = [], isLoading, isError } = useQuery({
+    queryKey: ["approved-products"],
+    queryFn: async () => (await axiosPublic.get("/api/products")).data,
+  });
   const requireLogin = () => {
     if (!user) {
       navigate("/login", { state: { from: "/" } });
@@ -57,7 +62,7 @@ export function Home() {
   return <main>
     {notice && <div className="toast"><Check size={18} /> {notice}</div>}
     <section className="hero-section"><div className="hero-content"><p className="eyebrow">Style made locally</p><h1>Wear your story with <em>pride.</em></h1><p className="hero-copy">Discover thoughtfully designed fashion, handwoven textiles, and timeless accessories from independent makers across Bangladesh.</p><div className="hero-actions"><Link className="btn btn-primary" to="/products">Shop the collection <ArrowRight size={18} /></Link><Link className="text-link" to="/about">Our story <ArrowRight size={16} /></Link></div><div className="trust-row"><span><ShieldCheck size={19} /> Quality checked</span><span><Truck size={19} /> Nationwide delivery</span></div></div><div className="hero-art"><div className="hero-circle"></div><img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=900&q=85" alt="Handwoven traditional fashion" /></div></section>
-    <section className="section"><div className="section-heading"><div><p className="eyebrow">Curated for you</p><h2>Our favourites</h2></div><Link className="text-link" to="/products">View all products <ArrowRight size={16} /></Link></div><div className="product-grid">{products.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} onAdd={add} onWishlist={addToWishlist} />)}</div></section>
+    <section className="section"><div className="section-heading"><div><p className="eyebrow">Curated for you</p><h2>Our favourites</h2></div><Link className="text-link" to="/products">View all products <ArrowRight size={16} /></Link></div>{isLoading && <div className="empty-state"><p>Loading our favourites...</p></div>}{isError && <div className="empty-state"><p>Could not load products right now.</p></div>}{!isLoading && !isError && homeProducts.length === 0 && <div className="empty-state"><h2>No products available yet</h2><p>Check back soon for new arrivals.</p></div>}{!isLoading && !isError && homeProducts.length > 0 && <div className="product-grid">{homeProducts.slice(0, 12).map((p) => <ProductCard key={p._id || p.id} product={p} onAdd={add} onWishlist={addToWishlist} />)}</div>}</section>
     <section className="story-banner"><div><p className="eyebrow">From our looms to your wardrobe</p><h2>Every outfit can support a local maker.</h2><p>We work directly with weavers, designers, and artisans, so your personal style creates a meaningful difference.</p><Link className="btn btn-light" to="/about">Meet our makers <ArrowRight size={18} /></Link></div><div className="story-stat"><strong>120+</strong><span>fashion makers in our community</span></div></section>
     <section className="section benefits"><div><Leaf /><strong>Made with care</strong><span>Small-batch and thoughtfully sourced.</span></div><div><Truck /><strong>Easy delivery</strong><span>Fast, reliable delivery to your door.</span></div><div><ShieldCheck /><strong>Shop with confidence</strong><span>Secure payments and easy returns.</span></div></section>
   </main>;

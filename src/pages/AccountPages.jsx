@@ -229,6 +229,7 @@ const getCollection = (data) => {
 
 export function AdminUsersPage() {
   const axiosSecure = useAxiosSecure();
+  const queryClient = useQueryClient();
   const { data: users = [], isLoading, isError } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
@@ -236,8 +237,12 @@ export function AdminUsersPage() {
       return getCollection(response.data);
     },
   });
+  const { mutate: updateRole, isPending: isUpdating, isError: isRoleUpdateError } = useMutation({
+    mutationFn: ({ id, role }) => axiosSecure.patch(`/api/users/${id}/role`, { role }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
 
-  return <main className="page account-page"><PageHeader eyebrow="Admin workspace" title={<>All <em>users.</em></>} description="Review the customers and sellers registered on DeshiCart." /><Panel><div className="panel-title"><div><h2>User directory</h2><p>{users.length} registered users</p></div><Users /></div>{isLoading && <p className="muted">Loading users...</p>}{isError && <p className="form-error">Could not load users.</p>}{!isLoading && users.length === 0 && <div className="empty-state"><Users size={35} /><h2>No users found</h2></div>}<div className="manage-list">{users.map((listedUser) => <div className="manage-row" key={listedUser._id || listedUser.uid || listedUser.email}><div><strong>{listedUser.name || listedUser.displayName || "Unnamed user"}</strong><span>{listedUser.email}</span></div><span className="status delivered">{listedUser.role || "customer"}</span></div>)}</div></Panel></main>;
+  return <main className="page account-page"><PageHeader eyebrow="Admin workspace" title={<>All <em>users.</em></>} description="Review the customers and sellers registered on DeshiCart." /><Panel><div className="panel-title"><div><h2>User directory</h2><p>{users.length} registered users</p></div><Users /></div>{isLoading && <p className="muted">Loading users...</p>}{isError && <p className="form-error">Could not load users.</p>}{isRoleUpdateError && <p className="form-error">Could not update the user role.</p>}{!isLoading && users.length === 0 && <div className="empty-state"><Users size={35} /><h2>No users found</h2></div>}<div className="manage-list">{users.map((listedUser) => <div className="manage-row user-manage-row" key={listedUser._id || listedUser.uid || listedUser.email}><div><strong>{listedUser.name || listedUser.displayName || "Unnamed user"}</strong><span>{listedUser.email}</span></div><select value={listedUser.role || "customer"} onChange={(event) => updateRole({ id: listedUser._id, role: event.target.value })} disabled={isUpdating || !listedUser._id} aria-label={`Role for ${listedUser.email}`}><option value="customer">Customer</option><option value="seller">Seller</option><option value="admin">Admin</option></select><span className={`status ${listedUser.role === "admin" ? "delivered" : "transit"}`}>{listedUser.role || "customer"}</span></div>)}</div></Panel></main>;
 }
 
 export function AdminPendingProductsPage() {
