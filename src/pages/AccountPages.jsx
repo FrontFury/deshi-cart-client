@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, ClipboardCheck, Edit3, Heart, Minus, Plus, ShoppingBag, Trash2, UserRound, Users } from "lucide-react";
+import { Check, ClipboardCheck, Edit3, Heart, Minus, Plus, ShoppingBag, Trash2, UserRound, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import useAuth from "../hooks/useAuth";
 import useCreateProduct from "../hooks/useCreateProduct";
@@ -51,11 +51,45 @@ export function WishlistPage() {
 export function ServerCartPage() {
   const axiosSecure = useAxiosSecure();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const { data: cartItems = [], isLoading, isError } = useQuery({ queryKey: ["cart"], queryFn: async () => (await axiosSecure.get("/api/cart")).data });
   const updateQuantity = useMutation({ mutationFn: ({ id, quantity }) => axiosSecure.patch(`/api/cart/${id}`, { quantity }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }) });
   const removeItem = useMutation({ mutationFn: (id) => axiosSecure.delete(`/api/cart/${id}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }) });
   const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.price) || 0) * item.quantity, 0);
-  return <main className="page account-page"><PageHeader eyebrow="Your shopping bag" title={<>Ready to <em>checkout?</em></>} description="Review your selected pieces before placing your order." /><div className="split-layout"><Panel><div className="panel-title"><div><h2>Cart items</h2><p>{cartItems.length} item{cartItems.length === 1 ? "" : "s"} in your bag</p></div><ShoppingBag /></div>{isLoading && <p className="muted">Loading your cart...</p>}{isError && <p className="form-error">Could not load your cart.</p>}{!isLoading && !isError && cartItems.length === 0 && <div className="empty-state"><ShoppingBag size={35} /><h2>Your cart is empty</h2><Link className="btn btn-primary" to="/products">Browse products</Link></div>}{cartItems.map((item) => <div className="line-item" key={item._id}><img src={item.image} alt={item.name} /><div className="line-item-info"><h3>{item.name}</h3><p>{item.category}</p><strong>{money(Number(item.price) || 0)}</strong><div className="quantity"><button disabled={item.quantity <= 1} onClick={() => updateQuantity.mutate({ id: item._id, quantity: item.quantity - 1 })} aria-label="Decrease quantity"><Minus size={15} /></button><span>{item.quantity}</span><button onClick={() => updateQuantity.mutate({ id: item._id, quantity: item.quantity + 1 })} aria-label="Increase quantity"><Plus size={15} /></button></div></div><button className="delete-button" onClick={() => removeItem.mutate(item._id)} aria-label={`Remove ${item.name}`}><Trash2 size={17} /></button></div>)}</Panel><Panel className="order-summary"><h2>Order summary</h2><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Delivery</span><strong>৳80</strong></div><hr /><div className="summary-total"><span>Total</span><strong>{money(subtotal + 80)}</strong></div><button disabled={!cartItems.length} className="btn btn-primary full">Proceed to checkout</button></Panel></div></main>;
+  const openCheckout = () => {
+    setCheckoutError("");
+    setCheckoutOpen(true);
+  };
+  const submitOrder = async (event) => {
+    event.preventDefault();
+    setIsSubmittingOrder(true);
+    setCheckoutError("");
+    const formData = new FormData(event.currentTarget);
+    const order = {
+      name: formData.get("name"),
+      number: formData.get("number"),
+      location: formData.get("location"),
+      email: user?.email,
+      items: cartItems,
+      subtotal,
+      deliveryFee: 80,
+      total: subtotal + 80,
+    };
+    try {
+      await axiosSecure.post("/api/orders", order);
+      await Promise.all(cartItems.map((item) => axiosSecure.delete(`/api/cart/${item._id}`)));
+      await queryClient.invalidateQueries({ queryKey: ["cart"] });
+      setCheckoutOpen(false);
+    } catch (error) {
+      setCheckoutError(error.response?.data?.message || "Could not place your order. Please try again.");
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+  return <><main className="page account-page"><PageHeader eyebrow="Your shopping bag" title={<>Ready to <em>checkout?</em></>} description="Review your selected pieces before placing your order." /><div className="split-layout"><Panel><div className="panel-title"><div><h2>Cart items</h2><p>{cartItems.length} item{cartItems.length === 1 ? "" : "s"} in your bag</p></div><ShoppingBag /></div>{isLoading && <p className="muted">Loading your cart...</p>}{isError && <p className="form-error">Could not load your cart.</p>}{!isLoading && !isError && cartItems.length === 0 && <div className="empty-state"><ShoppingBag size={35} /><h2>Your cart is empty</h2><Link className="btn btn-primary" to="/products">Browse products</Link></div>}{cartItems.map((item) => <div className="line-item" key={item._id}><img src={item.image} alt={item.name} /><div className="line-item-info"><h3>{item.name}</h3><p>{item.category}</p><strong>{money(Number(item.price) || 0)}</strong><div className="quantity"><button disabled={item.quantity <= 1} onClick={() => updateQuantity.mutate({ id: item._id, quantity: item.quantity - 1 })} aria-label="Decrease quantity"><Minus size={15} /></button><span>{item.quantity}</span><button onClick={() => updateQuantity.mutate({ id: item._id, quantity: item.quantity + 1 })} aria-label="Increase quantity"><Plus size={15} /></button></div></div><button className="delete-button" onClick={() => removeItem.mutate(item._id)} aria-label={`Remove ${item.name}`}><Trash2 size={17} /></button></div>)}</Panel><Panel className="order-summary"><h2>Order summary</h2><div><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div><span>Delivery</span><strong>৳80</strong></div><hr /><div className="summary-total"><span>Total</span><strong>{money(subtotal + 80)}</strong></div><button disabled={!cartItems.length} onClick={openCheckout} className="btn btn-primary full">Proceed to checkout</button></Panel></div></main>{checkoutOpen && <div className="checkout-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmittingOrder) setCheckoutOpen(false); }}><section className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="modal-header"><div><p className="eyebrow">Complete your order</p><h2 id="checkout-title">Delivery details</h2></div><button type="button" className="modal-close" onClick={() => setCheckoutOpen(false)} disabled={isSubmittingOrder} aria-label="Close checkout"><X size={20} /></button></div><form className="account-form" onSubmit={submitOrder}><label>Name<input name="name" required placeholder="Your full name" /></label><label>Phone number<input name="number" required type="tel" placeholder="+880 1XXX-XXXXXX" /></label><label>Delivery location<textarea name="location" required rows="3" placeholder="House, road, area, city" /></label>{checkoutError && <p className="form-error">{checkoutError}</p>}<button className="btn btn-primary full" type="submit" disabled={isSubmittingOrder}>{isSubmittingOrder ? "Placing order..." : `Confirm order · ${money(subtotal + 80)}`}</button></form></section></div>}</>;
 }
 
 export function ServerWishlistPage() {
@@ -68,8 +102,20 @@ export function ServerWishlistPage() {
 }
 
 export function OrdersPage() {
-  const orders = [{ id: "DC-1048", date: "02 Nov 2026", status: "Delivered", item: "Classic Handloom Saree", total: 1930 }, { id: "DC-1031", date: "18 Oct 2026", status: "On the way", item: "Jamdani Dupatta", total: 970 }];
-  return <main className="page account-page"><PageHeader eyebrow="Your purchases" title={<>My <em>orders.</em></>} description="Track your orders and revisit your DeshiCart purchases." /><Panel><div className="panel-title"><div><h2>Order history</h2><p>{orders.length} orders placed</p></div><ShoppingBag /></div><div className="orders-table">{orders.map((order) => <div className="order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.date}</span></div><div><strong>{order.item}</strong><span>{money(order.total)}</span></div><span className={`status ${order.status === "Delivered" ? "delivered" : "transit"}`}>{order.status}</span><Link className="text-link" to="/contact">View details</Link></div>)}</div></Panel></main>;
+  const axiosSecure = useAxiosSecure();
+  const { data: orders = [], isLoading, isError } = useQuery({
+    queryKey: ["orders"],
+    queryFn: async () => (await axiosSecure.get("/api/orders")).data,
+  });
+  const getOrderStatus = (order) => {
+    const statuses = order.items?.map((item) => item.status).filter(Boolean) || [];
+    if (statuses.includes("Cancelled")) return "Cancelled";
+    if (statuses.includes("Shipped")) return "Shipped";
+    if (statuses.includes("Processing")) return "Processing";
+    if (statuses.length && statuses.every((status) => status === "Delivered")) return "Delivered";
+    return order.status || "Pending";
+  };
+  return <main className="page account-page"><PageHeader eyebrow="Your purchases" title={<>My <em>orders.</em></>} description="Track your orders and revisit your DeshiCart purchases." /><Panel><div className="panel-title"><div><h2>Order history</h2><p>{orders.length} orders placed</p></div><ShoppingBag /></div>{isLoading && <p className="muted">Loading your orders...</p>}{isError && <p className="form-error">Could not load your orders.</p>}{!isLoading && !isError && !orders.length && <div className="empty-state"><ShoppingBag size={35} /><h2>No orders yet</h2><Link className="btn btn-primary" to="/products">Start shopping</Link></div>}<div className="orders-table">{orders.flatMap((order) => (order.items || []).map((item, index) => { const status = item.status || getOrderStatus(order); return <div className="order-row" key={`${order._id}-${item.productId || index}`}><div><strong>#{String(order._id).slice(-8).toUpperCase()}</strong><span>{new Date(order.createdAt).toLocaleDateString()}</span></div><div className="order-product"><img src={item.image} alt="" /><span><strong>{item.name}</strong><small>{item.category || "Product"} · {item.quantity} × {money(Number(item.price) || 0)}</small></span></div><span className={`status ${status === "Delivered" ? "delivered" : "transit"}`}>{status}</span><span className="muted">{order.location}</span></div>; }))}</div></Panel></main>;
 }
 
 export function ShopProfilePage() {
@@ -161,8 +207,18 @@ export function AllProductsPage() {
 }
 
 export function ManageOrdersPage() {
-  const orders = [{ id: "DC-1048", customer: "Tasnim Rahman", item: "Classic Handloom Saree", total: "৳1,930", status: "Processing" }, { id: "DC-1047", customer: "Nabila Ahmed", item: "Linen Relaxed Shirt", total: "৳1,330", status: "Shipped" }, { id: "DC-1046", customer: "Rafi Karim", item: "Artisan Leather Tote", total: "৳1,730", status: "Delivered" }];
-  return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>Manage <em>orders.</em></>} description="Keep customers updated from payment to delivery." /><Panel><div className="panel-title"><div><h2>Recent orders</h2><p>Update status as orders move through fulfilment.</p></div><ShoppingBag /></div><div className="manage-list">{orders.map((order) => <div className="manage-row order-manage-row" key={order.id}><div><strong>{order.id} · {order.customer}</strong><span>{order.item} · {order.total}</span></div><select defaultValue={order.status} aria-label={`Status for ${order.id}`}><option>Processing</option><option>Shipped</option><option>Delivered</option></select><button className="icon-action" aria-label={`Save ${order.id}`}><Check size={16} /></button></div>)}</div></Panel></main>;
+  const axiosSecure = useAxiosSecure();
+  const queryClient = useQueryClient();
+  const { data: orders = [], isLoading, isError } = useQuery({
+    queryKey: ["seller-orders"],
+    queryFn: async () => (await axiosSecure.get("/api/orders")).data,
+  });
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }) => axiosSecure.patch(`/api/orders/${id}/status`, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["seller-orders"] }),
+  });
+  const statuses = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
+  return <main className="page account-page"><PageHeader eyebrow="Shopkeeper workspace" title={<>Manage <em>orders.</em></>} description="Keep customers updated from payment to delivery." /><Panel><div className="panel-title"><div><h2>Recent orders</h2><p>Update status as orders move through fulfilment.</p></div><ShoppingBag /></div>{isLoading && <p className="muted">Loading orders...</p>}{isError && <p className="form-error">Could not load orders.</p>}{!isLoading && !isError && !orders.length && <div className="empty-state"><ShoppingBag size={35} /><h2>No orders for your products yet</h2></div>}<div className="manage-list">{orders.map((order) => order.items.map((item) => <div className="manage-row order-manage-row" key={`${order._id}-${item.productId}`}><div><strong>#{String(order._id).slice(-8).toUpperCase()} · {order.name}</strong><span>{item.name} × {item.quantity} · {money(Number(item.price) * Number(item.quantity))}</span></div><select defaultValue={item.status || "Pending"} aria-label={`Status for ${item.name}`} onChange={(event) => updateStatus.mutate({ id: order._id, status: event.target.value })} disabled={updateStatus.isPending}><option>{statuses[0]}</option>{statuses.slice(1).map((status) => <option key={status}>{status}</option>)}</select><span className={`status ${item.status === "Delivered" ? "delivered" : "transit"}`}>{item.status || "Pending"}</span></div>))}</div></Panel></main>;
 }
 
 const getCollection = (data) => {

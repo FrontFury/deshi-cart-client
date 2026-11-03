@@ -28,7 +28,8 @@ const useAxiosSecure = () => {
         const status = error.response?.status;
         const requestUrl = error.config?.url || "";
         const isRoleLookup = requestUrl.includes("/api/users/role/");
-        if ((status === 401 || status === 403) && !isRoleLookup) {
+        const isUserSync = requestUrl === "/api/users";
+        if (status === 401 && !isRoleLookup && !isUserSync) {
           await logOut();
           navigate("/login", { replace: true });
         }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight, Check, Heart, Leaf, Search, ShieldCheck,
   ShoppingBag, Star, Truck, UserRound,
@@ -43,11 +43,21 @@ function ProductCard({ product, onAdd, onWishlist }) {
 
 export function Home() {
   const [notice, setNotice] = useState("");
-  const add = (product) => { setNotice(`${product.name} added to your cart.`); window.setTimeout(() => setNotice(""), 2400); };
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const requireLogin = () => {
+    if (!user) {
+      navigate("/login", { state: { from: "/" } });
+      return false;
+    }
+    return true;
+  };
+  const add = (product) => { if (!requireLogin()) return; setNotice(`${product.name} added to your cart.`); window.setTimeout(() => setNotice(""), 2400); };
+  const addToWishlist = (product) => { if (!requireLogin()) return; setNotice(`${product.name} saved to your wishlist.`); window.setTimeout(() => setNotice(""), 2400); };
   return <main>
     {notice && <div className="toast"><Check size={18} /> {notice}</div>}
     <section className="hero-section"><div className="hero-content"><p className="eyebrow">Style made locally</p><h1>Wear your story with <em>pride.</em></h1><p className="hero-copy">Discover thoughtfully designed fashion, handwoven textiles, and timeless accessories from independent makers across Bangladesh.</p><div className="hero-actions"><Link className="btn btn-primary" to="/products">Shop the collection <ArrowRight size={18} /></Link><Link className="text-link" to="/about">Our story <ArrowRight size={16} /></Link></div><div className="trust-row"><span><ShieldCheck size={19} /> Quality checked</span><span><Truck size={19} /> Nationwide delivery</span></div></div><div className="hero-art"><div className="hero-circle"></div><img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=900&q=85" alt="Handwoven traditional fashion" /></div></section>
-    <section className="section"><div className="section-heading"><div><p className="eyebrow">Curated for you</p><h2>Our favourites</h2></div><Link className="text-link" to="/products">View all products <ArrowRight size={16} /></Link></div><div className="product-grid">{products.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} onAdd={add} />)}</div></section>
+    <section className="section"><div className="section-heading"><div><p className="eyebrow">Curated for you</p><h2>Our favourites</h2></div><Link className="text-link" to="/products">View all products <ArrowRight size={16} /></Link></div><div className="product-grid">{products.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} onAdd={add} onWishlist={addToWishlist} />)}</div></section>
     <section className="story-banner"><div><p className="eyebrow">From our looms to your wardrobe</p><h2>Every outfit can support a local maker.</h2><p>We work directly with weavers, designers, and artisans, so your personal style creates a meaningful difference.</p><Link className="btn btn-light" to="/about">Meet our makers <ArrowRight size={18} /></Link></div><div className="story-stat"><strong>120+</strong><span>fashion makers in our community</span></div></section>
     <section className="section benefits"><div><Leaf /><strong>Made with care</strong><span>Small-batch and thoughtfully sourced.</span></div><div><Truck /><strong>Easy delivery</strong><span>Fast, reliable delivery to your door.</span></div><div><ShieldCheck /><strong>Shop with confidence</strong><span>Secure payments and easy returns.</span></div></section>
   </main>;
@@ -57,6 +67,7 @@ export function Products() {
   const axiosPublic = useAxios();
   const axiosSecure = useAxiosSecure();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
@@ -87,12 +98,12 @@ export function Products() {
   });
   const filtered = useMemo(() => approvedProducts.filter((p) => (category === "All" || p.category === category) && p.name.toLowerCase().includes(query.toLowerCase())), [approvedProducts, category, query]);
   const add = async (p) => {
-    if (!user) { setNotice("Please sign in to add products to your cart."); return; }
+    if (!user) { navigate("/login", { state: { from: "/products" } }); return; }
     try { await addCart.mutateAsync(p); setNotice(`${p.name} added to your cart.`); } catch (error) { setNotice(error.response?.data?.message || "Could not add product to cart."); }
     window.setTimeout(() => setNotice(""), 2400);
   };
   const addToWishlist = async (p) => {
-    if (!user) { setNotice("Please sign in to save products."); return; }
+    if (!user) { navigate("/login", { state: { from: "/products" } }); return; }
     try { await addWishlist.mutateAsync(p); setNotice(`${p.name} saved to your wishlist.`); } catch (error) { setNotice(error.response?.data?.message || "Could not save product."); }
     window.setTimeout(() => setNotice(""), 2400);
   };
@@ -110,6 +121,6 @@ export function AccountPage({ title, description, shopkeeper = false }) {
   return <main className="page dashboard-page"><div className="page-heading"><p className="eyebrow">{shopkeeper ? "Shopkeeper workspace" : "Customer account"}</p><h1>{title}</h1><p>{description}</p></div><div className="success-panel"><UserRound size={40} /><h2>{shopkeeper ? "Welcome, shopkeeper" : "Welcome back"}</h2><p>{user?.email}</p><Link className="btn btn-primary" to={shopkeeper ? "/all-products" : "/products"}>{shopkeeper ? "View products" : "Continue shopping"} <ArrowRight size={18} /></Link></div></main>;
 }
 
-export function AuthPage({ mode = "login" }) { const { signInUser, registerUser, signInGoogle, updateUserProfile } = useAuth(); const { mutateAsync: createUser } = useCreateUser(); const navigate = useNavigate(); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const isLogin = mode === "login"; const submit = async (e) => { e.preventDefault(); setBusy(true); setError(""); const data = new FormData(e.currentTarget); try { if (isLogin) { await signInUser(data.get("email"), data.get("password")); } else { const result = await registerUser(data.get("email"), data.get("password")); const name = data.get("name"); if (name) await updateUserProfile({ displayName: name }); await createUser({ uid: result.user.uid, name: name || result.user.displayName || "", email: result.user.email, photoURL: result.user.photoURL || "", role: "customer", provider: "password" }); } navigate("/"); } catch (err) { setError(err?.response?.data?.message || err?.message?.replace("Firebase: ", "") || "Something went wrong. Please try again."); } finally { setBusy(false); } }; const handleGoogleLogin = async () => { setBusy(true); setError(""); try { const result = await signInGoogle(); try { await createUser({ uid: result.user.uid, name: result.user.displayName || "", email: result.user.email, photoURL: result.user.photoURL || "", role: "customer", provider: "google" }); } catch (err) { if (err.response?.status !== 409) throw err; } navigate("/"); } catch (err) { setError(err?.response?.data?.message || err?.message || "Google sign in failed."); } finally { setBusy(false); } }; return <main className="auth-page"><div className="auth-card"><Link className="brand auth-brand" to="/" aria-label="DeshiCart home"><img src="/DeshiCartLogo.png" alt="DeshiCart" /></Link><p className="eyebrow">{isLogin ? "Welcome back" : "Join our community"}</p><h1>{isLogin ? "Sign in to your account" : "Create your account"}</h1><p className="muted">{isLogin ? "Continue discovering things made with care." : "Save favourites and keep track of your orders."}</p><form onSubmit={submit} className="auth-form">{!isLogin && <label>Full name<input name="name" required placeholder="Your name" /></label>}<label>Email address<input name="email" type="email" required placeholder="you@example.com" /></label><label>Password<input name="password" type="password" minLength="6" required placeholder="At least 6 characters" /></label>{error && <p className="form-error">{error}</p>}<button disabled={busy} className="btn btn-primary full" type="submit">{busy ? "Please wait..." : isLogin ? "Sign in" : "Create account"}</button></form><div className="auth-divider"><span>or</span></div><button disabled={busy} className="btn btn-outline full" onClick={handleGoogleLogin}>Continue with Google</button><p className="auth-switch">{isLogin ? "New to DeshiCart?" : "Already have an account?"} <Link to={isLogin ? "/signup" : "/login"}>{isLogin ? "Create an account" : "Sign in"}</Link></p></div></main>; }
+export function AuthPage({ mode = "login" }) { const { signInUser, registerUser, signInGoogle, updateUserProfile } = useAuth(); const { mutateAsync: createUser } = useCreateUser(); const navigate = useNavigate(); const location = useLocation(); const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const isLogin = mode === "login"; const destination = location.state?.from?.pathname || "/"; const ensureServerUser = async (user, provider, name = user.displayName || "") => { try { await createUser({ uid: user.uid, name, email: user.email, photoURL: user.photoURL || "", role: "customer", provider }); } catch (err) { if (err.response?.status !== 409) throw err; } }; const submit = async (e) => { e.preventDefault(); setBusy(true); setError(""); const data = new FormData(e.currentTarget); try { if (isLogin) { const result = await signInUser(data.get("email"), data.get("password")); await ensureServerUser(result.user, "password"); } else { const result = await registerUser(data.get("email"), data.get("password")); const name = data.get("name"); if (name) await updateUserProfile({ displayName: name }); await ensureServerUser(result.user, "password", name || result.user.displayName || ""); } navigate(destination, { replace: true }); } catch (err) { setError(err?.response?.data?.message || err?.message?.replace("Firebase: ", "") || "Something went wrong. Please try again."); } finally { setBusy(false); } }; const handleGoogleLogin = async () => { setBusy(true); setError(""); try { const result = await signInGoogle(); await ensureServerUser(result.user, "google"); navigate(destination, { replace: true }); } catch (err) { setError(err?.response?.data?.message || err?.message || "Google sign in failed."); } finally { setBusy(false); } }; return <main className="auth-page"><div className="auth-card"><Link className="brand auth-brand" to="/" aria-label="DeshiCart home"><img src="/DeshiCartLogo.png" alt="DeshiCart" /></Link><p className="eyebrow">{isLogin ? "Welcome back" : "Join our community"}</p><h1>{isLogin ? "Sign in to your account" : "Create your account"}</h1><p className="muted">{isLogin ? "Continue discovering things made with care." : "Save favourites and keep track of your orders."}</p><form onSubmit={submit} className="auth-form">{!isLogin && <label>Full name<input name="name" required placeholder="Your name" /></label>}<label>Email address<input name="email" type="email" required placeholder="you@example.com" /></label><label>Password<input name="password" type="password" minLength="6" required placeholder="At least 6 characters" /></label>{error && <p className="form-error">{error}</p>}<button disabled={busy} className="btn btn-primary full" type="submit">{busy ? "Please wait..." : isLogin ? "Sign in" : "Create account"}</button></form><div className="auth-divider"><span>or</span></div><button disabled={busy} className="btn btn-outline full" onClick={handleGoogleLogin}>Continue with Google</button><p className="auth-switch">{isLogin ? "New to DeshiCart?" : "Already have an account?"} <Link to={isLogin ? "/signup" : "/login"}>{isLogin ? "Create an account" : "Sign in"}</Link></p></div></main>; }
 
 export function NotFound() { return <main className="page empty-state"><p className="eyebrow">404</p><h1>That page wandered off.</h1><p>Let’s get you back to something good.</p><Link className="btn btn-primary" to="/">Back to home <ArrowRight size={18} /></Link></main>; }
