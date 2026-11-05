@@ -1,16 +1,63 @@
-# React + Vite
+DeshiCart 🛒
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+DeshiCart is a modern e-commerce web application designed for seamlessly browsing and purchasing authentic local products online.
 
-Currently, two official plugins are available:
+🚀 Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Responsive Navigation: Clean and responsive navigation bar with desktop and mobile support.
 
-## React Compiler
+Product Showcase: Sleek grid layout for displaying items.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Customer Care & Support Links: Clear navigation for policies, FAQs, and contact info.
 
-## Expanding the ESLint configuration
+Newsletter Subscription: Integrated subscription form for updates and deals.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+🛠️ Tech Stack
+
+Frontend: React (JSX)
+
+Styling: Tailwind CSS
+
+🏁 Getting Started
+
+Prerequisites
+
+Make sure you have Node.js and npm installed on your machine.
+
+Installation
+
+Clone the repository:
+
+git clone https://github.com/your-username/deshicart.git
+cd deshicart
+
+
+Install dependencies:
+
+npm install
+
+
+Run the development server:
+
+npm start
+# or
+npm run dev
+
+
+📁 Project Structure
+
+deshicart/
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── Navbar.jsx
+│   │   └── Footer.jsx
+│   ├── App.jsx
+│   └── index.js
+├── README.md
+└── package.json
+
+
+📜 License
+
+This project is licensed under the MIT License.
